@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Extracto — Analizador de movimientos</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="top">
+ 
+  <h1>Analizador de movimientos bancarios</h1>
+  <p>
+    Suba su archivo Excel bancario y visualice de forma clara y 
+    detallada los ingresos y egresos de su cuenta, organizados por día, semana, mes o año.
+  </p>
+</header>
+
+<main>
+
+  <div class="card" id="uploadCard">
+    <h2><span class="step-num">1</span>Sube tu archivo</h2>
+    <p class="hint">Elige el archivo Excel de tu banco (.xlsx, .xls o .csv). Todo se procesa en este mismo dispositivo.</p>
+    <div id="dropzone">
+      <div class="icon">↓</div>
+      <div class="main-txt">Arrastra tu archivo aquí</div>
+      <div class="sub-txt">o presiona el botón de abajo</div>
+      <button type="button" id="chooseFileBtn">Elegir archivo</button>
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+    </div>
+    <div id="fileName"></div>
+    <div id="errorNote"></div>
+  </div>
+
+  <div class="card" id="mapCard">
+    <h2><span class="step-num">2</span>Tu archivo, listo</h2>
+    <p class="hint" id="detectionNote" style="display:none;"></p>
+    <div id="skippedNote"></div>
+
+    <details class="advanced" id="advancedDetails">
+      <summary>¿Algo no se ve bien? Ajustar columnas</summary>
+      <div class="advanced-inner">
+        <div class="preview-wrap">
+          <table class="preview" id="previewTable"></table>
+        </div>
+
+        <div class="grid2">
+          <div>
+            <label class="field-label">Columna de fecha</label>
+            <select id="colFecha"></select>
+          </div>
+          <div></div>
+        </div>
+
+        <label class="field-label">¿Cómo vienen los montos?</label>
+        <div class="mode-toggle">
+          <div class="mode-btn active" data-mode="single">Una columna (+ ingreso / − gasto)</div>
+          <div class="mode-btn" data-mode="split">Dos columnas (ingreso y gasto)</div>
+          <div class="mode-btn" data-mode="type">Monto + columna de tipo (ej. Yape)</div>
+        </div>
+
+        <div class="grid2" id="singleModeFields">
+          <div>
+            <label class="field-label">Columna de monto</label>
+            <select id="colMontoUnico"></select>
+          </div>
+          <div></div>
+        </div>
+
+        <div class="grid2" id="splitModeFields" style="display:none;">
+          <div>
+            <label class="field-label">Columna de ingresos</label>
+            <select id="colIngreso"></select>
+          </div>
+          <div>
+            <label class="field-label">Columna de gastos</label>
+            <select id="colGasto"></select>
+          </div>
+        </div>
+
+        <div id="typeModeFields" style="display:none;">
+          <div class="grid2">
+            <div>
+              <label class="field-label">Columna de monto</label>
+              <select id="colMontoTipo"></select>
+            </div>
+            <div>
+              <label class="field-label">Columna de tipo de operación</label>
+              <select id="colTipoOperacion"></select>
+            </div>
+          </div>
+          <label class="field-label">Marca cada tipo como ingreso o gasto</label>
+          <div id="tipoChips" class="tipo-chips"></div>
+        </div>
+
+        <button class="primary" id="processBtn">Volver a calcular</button>
+      </div>
+    </details>
+  </div>
+
+  <section id="resultsSection">
+    <div class="card">
+      <h2><span class="step-num">3</span>Filtrar</h2>
+      <p class="hint">Opcional — para ver solo una parte de tus movimientos.</p>
+
+      <div class="grid2">
+        <div>
+          <label class="field-label">Desde</label>
+          <input type="date" id="filterDesde" class="date-input">
+        </div>
+        <div>
+          <label class="field-label">Hasta</label>
+          <input type="date" id="filterHasta" class="date-input">
+        </div>
+      </div>
+
+      <div id="filterBusquedaWrap">
+        <label class="field-label">Buscar por nombre</label>
+        <input type="text" id="filterBusqueda" class="text-input" placeholder="Ej: Juan Pérez">
+      </div>
+
+      <div class="filter-actions">
+        <button class="primary" id="applyFiltersBtn">Filtrar</button>
+        <button class="secondary" id="clearFiltersBtn">Quitar filtros</button>
+      </div>
+      <p id="filterEmptyNote" class="hint" style="display:none; margin:14px 0 0;">No se encontraron movimientos con estos filtros.</p>
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-card ingreso">
+        <div class="label">↑ Dinero que entró</div>
+        <div class="amount" id="totalIngresos">—</div>
+      </div>
+      <div class="summary-card gasto">
+        <div class="label">↓ Dinero que salió</div>
+        <div class="amount" id="totalGastos">—</div>
+      </div>
+      <div class="summary-card neto">
+        <div class="label">Lo que te queda</div>
+        <div class="amount" id="totalNeto">—</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="step-num">4</span>Ver el detalle</h2>
+      <p class="hint">Elige cómo quieres verlo:</p>
+      <div class="tabs">
+        <button class="tab-btn active" data-group="day">Por día</button>
+        <button class="tab-btn" data-group="week">Por semana</button>
+        <button class="tab-btn" data-group="month">Por mes</button>
+        <button class="tab-btn" data-group="year">Por año</button>
+        <button class="tab-btn" id="personTabBtn" data-group="person" style="display:none;">Por persona</button>
+      </div>
+      <div class="ledger" id="ledger"></div>
+      <div id="personList" style="display:none;"></div>
+    </div>
+
+    <div id="resetRow">
+      <button class="secondary" id="resetBtn">Subir otro archivo</button>
+    </div>
+  </section>
+
+</main>
+
+<div class="footnote">Todo el cálculo ocurre en este mismo dispositivo</div>
+
+<script src="app.js"></script>
+
+</body>
+</html>
